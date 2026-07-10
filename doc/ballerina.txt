@@ -9,8 +9,10 @@ CONTENTS                                                    *ballerina-contents*
     4. Configuration ......................... |ballerina.nvim-config|
     5. Commands .............................. |ballerina-commands|
     6. Format on save ........................ |ballerina-format|
-    7. Health ................................ |ballerina-health|
-    8. License ............................... |ballerina-license|
+    7. Quickfix .............................. |ballerina-quickfix|
+    8. Debugging ............................. |ballerina-dap|
+    9. Health ................................ |ballerina-health|
+    10. License .............................. |ballerina-license|
 
 ==============================================================================
 1. Introduction                                         *ballerina-introduction*
@@ -51,11 +53,15 @@ Defaults: >lua
         root_markers = { "Ballerina.toml" },
         config = nil,
       },
+      dap = {
+        enabled = true,
+      },
     })
 <
                                                          *ballerina.nvim-bal_cmd*
 bal_cmd ~
     Path to the `bal` binary. `nil` (the default) auto-detects: PATH first,
+    then `$BALLERINA_HOME/bin/bal` (the installers export $BALLERINA_HOME),
     then the install locations used by the official Linux/macOS/Windows
     distributions.
 
@@ -91,6 +97,11 @@ lsp.config ~
     Equivalently, override any field directly: >lua
         vim.lsp.config("ballerina", { ... })
 <
+                                                     *ballerina.nvim-dap-enabled*
+dap.enabled ~
+    Register the debug adapter and configurations when nvim-dap is
+    installed. See |ballerina-dap|.
+
 ==============================================================================
 5. Commands                                                  *ballerina-commands*
 
@@ -104,14 +115,22 @@ Buffer-local commands, available in ballerina buffers:
 :BallerinaFormatToggle  Toggle format-on-save for the current buffer.
 
                                                                 *:BallerinaRun*
-:BallerinaRun           Run `bal run` on the package (or standalone script)
+:BallerinaRun [args]    Run `bal run` on the package (or standalone script)
                         in a terminal split.
 
                                                                *:BallerinaTest*
-:BallerinaTest          Run `bal test` in a terminal split.
+:BallerinaTest [args]   Run `bal test` in a terminal split.
 
                                                               *:BallerinaBuild*
-:BallerinaBuild         Run `bal build` in a terminal split.
+:BallerinaBuild [args]  Run `bal build` in a terminal split.
+
+For the run/test/build commands, arguments before a literal `--` are passed
+as CLI options (before the target); the `--` and everything after it are
+passed as program arguments (after the target), matching
+`bal run [options] [target] [-- program-args]`: >vim
+    :BallerinaTest --tests fooTest
+    :BallerinaRun -- 8080 --verbose
+<
 
 ==============================================================================
 6. Format on save                                              *ballerina-format*
@@ -128,13 +147,44 @@ or: >lua
 To disable it globally, set |ballerina.nvim-format_on_save| to `false`.
 
 ==============================================================================
-7. Health                                                      *ballerina-health*
+7. Quickfix                                                  *ballerina-quickfix*
 
-Run `:checkhealth ballerina` to verify the Neovim version, the resolved
-`bal` binary (and its version), and the LSP client state.
+When a |:BallerinaRun|/|:BallerinaTest|/|:BallerinaBuild| job finishes, any
+compiler diagnostics in its output (`ERROR [file:(l:c,l:c)] msg`) are parsed
+into the |quickfix| list with their full ranges — use |:copen| and |:cnext|
+to jump between them.
+
+                                                           *compiler-ballerina*
+A compiler definition is also included for the classic workflow: >vim
+    :compiler ballerina
+    :make
+<
+==============================================================================
+8. Debugging                                                      *ballerina-dap*
+
+When https://github.com/mfussenegger/nvim-dap is installed (and
+|ballerina.nvim-dap-enabled| is not disabled), opening a ballerina buffer
+registers the Ballerina debug adapter (`bal start-debugger-adapter`, the
+same one the VS Code extension uses) and four configurations:
+
+- Debug Ballerina program
+- Debug Ballerina program (prompt for arguments)
+- Debug Ballerina tests
+- Attach to a running program started with `bal run --debug <port>`
+
+Set a breakpoint and run `require("dap").continue()`. No launch.json is
+needed. The first launch takes several seconds, as both the adapter and the
+debuggee are JVM processes.
 
 ==============================================================================
-8. License                                                    *ballerina-license*
+9. Health                                                      *ballerina-health*
+
+Run `:checkhealth ballerina` to verify the Neovim version, the resolved
+`bal` binary (and its version), the LSP client state, and the nvim-dap
+integration.
+
+==============================================================================
+10. License                                                   *ballerina-license*
 
 MIT.
 

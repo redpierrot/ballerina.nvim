@@ -64,7 +64,24 @@ test("util: bal_cmd honors the config override", function()
   config.setup({})
 end)
 
+test("util: bal_cmd falls back to $BALLERINA_HOME/bin/bal", function()
+  package.loaded["ballerina.util"] = nil -- drop the module-level cache
+  local home = vim.fn.tempname()
+  vim.fn.mkdir(home .. "/bin", "p")
+  local fake = home .. "/bin/bal"
+  vim.fn.writefile({ "#!/bin/sh", "exit 0" }, fake)
+  vim.uv.fs_chmod(fake, 493) -- 0755
+  local saved_path, saved_home = vim.env.PATH, vim.env.BALLERINA_HOME
+  vim.env.PATH = home -- no `bal` directly on PATH (bin/ is not included)
+  vim.env.BALLERINA_HOME = home
+  local found = require("ballerina.util").bal_cmd()
+  vim.env.PATH = saved_path
+  vim.env.BALLERINA_HOME = saved_home
+  eq(fake, found)
+end)
+
 test("util: bal_cmd finds an executable on PATH", function()
+  package.loaded["ballerina.util"] = nil -- drop the module-level cache
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
   local fake = dir .. "/bal"
@@ -75,6 +92,98 @@ test("util: bal_cmd finds an executable on PATH", function()
   local found = require("ballerina.util").bal_cmd()
   vim.env.PATH = saved_path
   eq(fake, found)
+end)
+
+---------------------------------------------------------------------- cli --
+
+local cli = require("ballerina.cli")
+
+test("cli: build_cmd with no args", function()
+  eq({ "bal", "build" }, cli.build_cmd("bal", "build", nil, {}))
+  eq({ "bal", "run", "main.bal" }, cli.build_cmd("bal", "run", "main.bal", nil))
+end)
+
+test("cli: build_cmd puts options before the target", function()
+  eq(
+    { "bal", "test", "--tests", "fooTest", "main.bal" },
+    cli.build_cmd("bal", "test", "main.bal", { "--tests", "fooTest" })
+  )
+end)
+
+test("cli: build_cmd puts `--` program args after the target", function()
+  eq(
+    { "bal", "run", "main.bal", "--", "8080", "debug" },
+    cli.build_cmd("bal", "run", "main.bal", { "--", "8080", "debug" })
+  )
+  eq(
+    { "bal", "run", "--observability-included", "main.bal", "--", "8080" },
+    cli.build_cmd("bal", "run", "main.bal", { "--observability-included", "--", "8080" })
+  )
+end)
+
+test("cli: errorformat parses ERROR and WARNING diagnostics with ranges", function()
+  local parsed = vim.fn.getqflist({
+    lines = {
+      "Compiling source",
+      "\tdemo/e2epkg:0.1.0",
+      "ERROR [/pkg/main.bal:(4:5,4:18)] undefined symbol 'foo'",
+      "WARNING [/pkg/util.bal:(2:1,3:10)] unused variable 'x'",
+      "error: compilation contains errors",
+    },
+    efm = cli.errorformat,
+  })
+  local items = vim.tbl_filter(function(item)
+    return item.valid == 1
+  end, parsed.items)
+  eq(2, #items, "two valid diagnostics")
+  eq("E", items[1].type)
+  eq(4, items[1].lnum)
+  eq(5, items[1].col)
+  eq(4, items[1].end_lnum)
+  eq(18, items[1].end_col)
+  eq("undefined symbol 'foo'", items[1].text)
+  eq("W", items[2].type)
+  eq(3, items[2].end_lnum)
+end)
+
+test("cli: compiler/ballerina.vim stays in sync with cli.errorformat", function()
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_call(bufnr, function()
+    vim.cmd("compiler ballerina")
+    eq("bal build", vim.o.makeprg:gsub("\\ ", " "))
+    eq(cli.errorformat, vim.opt_local.errorformat:get() and vim.bo.errorformat or "")
+  end)
+  vim.api.nvim_buf_delete(bufnr, { force = true })
+end)
+
+---------------------------------------------------------------------- dap --
+
+test("dap: registers adapter and configurations when nvim-dap is present", function()
+  package.loaded["dap"] = { adapters = {}, configurations = {} }
+  local fake_dap = package.loaded["dap"]
+
+  assert(require("ballerina.dap").setup(), "setup() should report success")
+  assert(type(fake_dap.adapters.ballerina) == "function", "adapter registered")
+  eq(4, #fake_dap.configurations.ballerina, "launch x3 + attach")
+
+  config.setup({ bal_cmd = "/opt/custom/bal" })
+  local adapter
+  fake_dap.adapters.ballerina(function(a)
+    adapter = a
+  end, {})
+  config.setup({})
+
+  eq("server", adapter.type)
+  eq("/opt/custom/bal", adapter.executable.command)
+  eq("start-debugger-adapter", adapter.executable.args[1])
+  local port = tonumber(adapter.executable.args[2])
+  assert(port and port > 0, "adapter spawned with a real port")
+  eq(port, adapter.port, "connects to the same port it spawned on")
+
+  local attach = fake_dap.configurations.ballerina[4]
+  eq("attach", attach.request)
+  eq("127.0.0.1", attach.debuggeeHost)
+  package.loaded["dap"] = nil
 end)
 
 ------------------------------------------------------------------- indent --

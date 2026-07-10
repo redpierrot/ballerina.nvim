@@ -57,9 +57,17 @@ for command, subcommand in pairs({
   BallerinaTest = "test",
   BallerinaBuild = "build",
 }) do
-  vim.api.nvim_buf_create_user_command(bufnr, command, function()
-    require("ballerina.cli").run(subcommand, bufnr)
-  end, { desc = "Run `bal " .. subcommand .. "` on the file/package in a terminal split" })
+  vim.api.nvim_buf_create_user_command(bufnr, command, function(opts)
+    require("ballerina.cli").run(subcommand, bufnr, opts.fargs)
+  end, {
+    nargs = "*",
+    complete = "file",
+    desc = "Run `bal " .. subcommand .. "` on the file/package in a terminal split",
+  })
+end
+
+if config.dap.enabled then
+  require("ballerina.dap").setup()
 end
 
 vim.b.undo_ftplugin = table.concat({

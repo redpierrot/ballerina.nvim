@@ -18,7 +18,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - Brace/paren-aware `indentexpr` (Ballerina-aware comment/string/template
   stripping, quoted-identifier safe).
 - Buffer-local commands: `:BallerinaFormat`, `:BallerinaFormatToggle`,
-  `:BallerinaRun`, `:BallerinaTest`, `:BallerinaBuild`.
+  `:BallerinaRun`, `:BallerinaTest`, `:BallerinaBuild` — the last three
+  with argument passthrough (`:BallerinaRun -- 8080`,
+  `:BallerinaTest --tests fooTest`).
+- Debugging via nvim-dap: the Ballerina debug adapter
+  (`bal start-debugger-adapter`) and launch/attach configurations are
+  registered automatically when nvim-dap is installed.
+- Quickfix integration: diagnostics from run/test/build output are parsed
+  (with full ranges) into the quickfix list, plus a `:compiler ballerina`
+  definition for `:make`.
 - `:checkhealth ballerina`.
-- `bal` auto-detection across the official Linux/macOS/Windows install
-  locations, with a friendly one-shot warning when missing.
+- `bal` auto-detection: PATH, then `$BALLERINA_HOME/bin/bal`, then the
+  official Linux/macOS/Windows install locations, with a friendly one-shot
+  warning when missing.

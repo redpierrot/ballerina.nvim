@@ -40,6 +40,16 @@ M.check = function()
   else
     health.info("LSP disabled via `lsp.enabled = false`")
   end
+
+  if not config.dap.enabled then
+    health.info("DAP disabled via `dap.enabled = false`")
+  elseif not pcall(require, "dap") then
+    health.info("nvim-dap not installed; debugging support is inactive")
+  elseif require("ballerina.dap").setup() then
+    health.ok("nvim-dap found, ballerina adapter and configurations registered")
+  else
+    health.warn("nvim-dap found but the ballerina adapter failed to register")
+  end
 end
 
 return M

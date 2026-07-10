@@ -302,6 +302,22 @@ end-to-end format/reload/missing-`bal` paths verified against Ballerina
 - Docs: D1, D2, D3, D4
 - Publishing: P3 workflow committed (`.github/workflows/release.yml`)
 
+Post-review additions (from the "missing pieces vs. mature language
+plugins" comparison, all implemented and e2e-verified):
+
+- **DAP debugging** (`lua/ballerina/dap.lua`): nvim-dap adapter via
+  `bal start-debugger-adapter` + 3 launch configs and attach. Request
+  attribute names verified against the adapter sources in ballerina-lang
+  (`script`, `ballerina.home`, `ballerina.command`, `scriptArguments`,
+  `debugTests`, `debuggeeHost`/`debuggeePort`).
+- **Quickfix integration**: run/test/build output parsed into quickfix with
+  full ranges (`%e`/`%k`); `compiler/ballerina.vim` reads the same
+  errorformat from `cli.errorformat` (sync asserted by a test).
+- **Command arguments**: `:BallerinaRun/Test/Build [args]` with `--`
+  splitting options (before target) from program args (after target).
+- **`$BALLERINA_HOME` detection**: checked after PATH, before the
+  hardcoded install locations (the official installers export it).
+
 **Remaining — external steps only, in order:**
 
 1. **P1**: push to `github.com/redpierrot/ballerina.nvim`, set description +

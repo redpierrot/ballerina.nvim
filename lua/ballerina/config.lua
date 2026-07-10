@@ -4,12 +4,17 @@
 ---@field config table? Extra fields merged into the LSP client config, e.g.
 ---`capabilities`, `settings`, `init_options` (see :h vim.lsp.Config).
 
+---@class ballerina.DapConfig
+---@field enabled boolean Register the nvim-dap adapter/configurations when
+---nvim-dap is installed.
+
 ---@class ballerina.Config
 ---@field bal_cmd string? Path to the `bal` binary. nil = auto-detect (PATH,
 ---then the known install locations of the official distributions).
 ---@field format_on_save boolean Run `bal format` after saving a .bal file.
 ---@field indent boolean Use the bundled brace/paren-aware indentexpr.
 ---@field lsp ballerina.LspConfig
+---@field dap ballerina.DapConfig
 
 local M = {}
 
@@ -23,6 +28,9 @@ M.defaults = {
     root_markers = { "Ballerina.toml" },
     config = nil,
   },
+  dap = {
+    enabled = true,
+  },
 }
 
 M.options = vim.deepcopy(M.defaults)
@@ -34,6 +42,7 @@ M.setup = function(opts)
   vim.validate("format_on_save", opts.format_on_save, "boolean", true)
   vim.validate("indent", opts.indent, "boolean", true)
   vim.validate("lsp", opts.lsp, "table", true)
+  vim.validate("dap", opts.dap, "table", true)
 
   M.options = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts)
 end

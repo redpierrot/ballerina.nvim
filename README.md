@@ -29,7 +29,14 @@ Ballerina yet.
   `io:println(...)` as C jump labels (`identifier:`) and de-indents them to
   column 0.
 - **Commands** — `:BallerinaFormat`, `:BallerinaRun`, `:BallerinaTest`,
-  `:BallerinaBuild`, `:BallerinaFormatToggle`.
+  `:BallerinaBuild` (with argument passthrough), `:BallerinaFormatToggle`.
+- **Quickfix** — compiler diagnostics from `:BallerinaBuild`/`Run`/`Test`
+  land in the quickfix list (`:cnext` and friends), and a
+  `:compiler ballerina` definition makes plain `:make` work too.
+- **Debugging** — if [nvim-dap](https://github.com/mfussenegger/nvim-dap)
+  is installed, the Ballerina debug adapter and launch/attach
+  configurations are registered automatically. See
+  [Debugging](#debugging).
 - **Health check** — `:checkhealth ballerina`.
 
 ## Requirements
@@ -104,9 +111,24 @@ Buffer-local commands in `.bal` buffers:
 | --- | --- |
 | `:BallerinaFormat` | Format the file (or its enclosing package) now |
 | `:BallerinaFormatToggle` | Toggle format-on-save for this buffer |
-| `:BallerinaRun` | `bal run` the package/script in a terminal split |
-| `:BallerinaTest` | `bal test` in a terminal split |
-| `:BallerinaBuild` | `bal build` in a terminal split |
+| `:BallerinaRun [args]` | `bal run` the package/script in a terminal split |
+| `:BallerinaTest [args]` | `bal test` in a terminal split |
+| `:BallerinaBuild [args]` | `bal build` in a terminal split |
+
+The run/test/build commands accept arguments: everything before a literal
+`--` is passed as CLI options (before the target), the `--` and everything
+after it as program arguments (after the target), matching
+`bal run [options] [target] [-- program-args]`:
+
+```vim
+:BallerinaTest --tests fooTest
+:BallerinaRun -- 8080 --verbose
+```
+
+When the command finishes, any compiler diagnostics in its output are
+parsed into the quickfix list — `:copen` / `:cnext` to jump between them.
+Prefer classic `:make`? `:compiler ballerina` sets `makeprg`/`errorformat`
+to the same patterns.
 
 Saving a file runs `bal format` in the background and reloads the buffer(s)
 when it finishes. To turn that off for one buffer, use
@@ -119,8 +141,9 @@ Defaults:
 
 ```lua
 require("ballerina").setup({
-  -- Path to the `bal` binary. nil = auto-detect (PATH, then the known
-  -- install locations used by the official installers).
+  -- Path to the `bal` binary. nil = auto-detect: PATH, then
+  -- $BALLERINA_HOME/bin/bal, then the known install locations used by the
+  -- official installers.
   bal_cmd = nil,
   -- Run `bal format` after saving a .bal file.
   format_on_save = true,
@@ -132,6 +155,10 @@ require("ballerina").setup({
     -- Extra fields merged into the LSP client config (:h vim.lsp.Config),
     -- e.g. capabilities, settings, init_options.
     config = nil,
+  },
+  dap = {
+    -- Register the debug adapter/configurations when nvim-dap is installed.
+    enabled = true,
   },
 })
 ```
@@ -166,6 +193,23 @@ vim.lsp.config("ballerina", {
 equivalent `ballerina` definition. That's fine: Neovim merges same-named
 `lsp/` definitions, and anything set via `vim.lsp.config("ballerina", ...)`
 wins over both. You will not get two clients.
+
+## Debugging
+
+With [nvim-dap](https://github.com/mfussenegger/nvim-dap) installed,
+opening a `.bal` file registers the Ballerina debug adapter (the same
+`bal start-debugger-adapter` the VS Code extension uses) plus four
+configurations:
+
+- **Debug Ballerina program** — debug the current package/script
+- **Debug Ballerina program (prompt for arguments)**
+- **Debug Ballerina tests** — `bal test` under the debugger
+- **Attach to running program** — for processes started with
+  `bal run --debug <port>`
+
+Set a breakpoint and `:lua require("dap").continue()` (or your usual dap
+keymaps). No launch.json needed. The first launch takes several seconds —
+the adapter and the debuggee are JVM processes.
 
 ## Troubleshooting
 
