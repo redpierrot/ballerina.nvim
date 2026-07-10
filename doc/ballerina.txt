@@ -1,0 +1,141 @@
+*ballerina.txt*   Ballerina support for Neovim
+
+==============================================================================
+CONTENTS                                                    *ballerina-contents*
+
+    1. Introduction .......................... |ballerina-introduction|
+    2. Requirements .......................... |ballerina-requirements|
+    3. Setup ................................. |ballerina-setup|
+    4. Configuration ......................... |ballerina.nvim-config|
+    5. Commands .............................. |ballerina-commands|
+    6. Format on save ........................ |ballerina-format|
+    7. Health ................................ |ballerina-health|
+    8. License ............................... |ballerina-license|
+
+==============================================================================
+1. Introduction                                         *ballerina-introduction*
+
+ballerina.nvim provides Ballerina syntax highlighting, LSP setup,
+package-aware format-on-save, auto-indent, and `bal` run/test/build
+commands for Neovim.
+
+==============================================================================
+2. Requirements                                         *ballerina-requirements*
+
+- Neovim >= 0.11
+- The Ballerina distribution (https://ballerina.io/downloads/) installed,
+  with `bal` on your PATH or |ballerina.nvim-bal_cmd| set. The distribution
+  bundles its own Java runtime; no separate JDK is needed.
+
+==============================================================================
+3. Setup                                                        *ballerina-setup*
+
+                                                            *ballerina.setup()*
+>lua
+    require("ballerina").setup({})
+<
+Calling `setup()` is optional; the plugin works with defaults as soon as a
+`.bal` file is opened. Call it only to override |ballerina.nvim-config|
+options.
+
+==============================================================================
+4. Configuration                                          *ballerina.nvim-config*
+
+Defaults: >lua
+    require("ballerina").setup({
+      bal_cmd = nil,
+      format_on_save = true,
+      indent = true,
+      lsp = {
+        enabled = true,
+        root_markers = { "Ballerina.toml" },
+        config = nil,
+      },
+    })
+<
+                                                         *ballerina.nvim-bal_cmd*
+bal_cmd ~
+    Path to the `bal` binary. `nil` (the default) auto-detects: PATH first,
+    then the install locations used by the official Linux/macOS/Windows
+    distributions.
+
+                                                  *ballerina.nvim-format_on_save*
+format_on_save ~
+    Run `bal format` after saving a `.bal` file. See |ballerina-format|.
+
+                                                          *ballerina.nvim-indent*
+indent ~
+    Use the bundled brace/paren-aware 'indentexpr'. Set to `false` to keep
+    your own indent settings.
+
+                                                     *ballerina.nvim-lsp-enabled*
+lsp.enabled ~
+    Start the Ballerina language server for `.bal` buffers.
+
+                                                *ballerina.nvim-lsp-root_markers*
+lsp.root_markers ~
+    Files/directories that mark the workspace root.
+
+                                                      *ballerina.nvim-lsp-config*
+lsp.config ~
+    Extra fields merged into the LSP client config (see |vim.lsp.Config|),
+    e.g. `capabilities`, `settings`, `init_options`: >lua
+        require("ballerina").setup({
+          lsp = {
+            config = {
+              capabilities = require("blink.cmp").get_lsp_capabilities(),
+            },
+          },
+        })
+<
+    Equivalently, override any field directly: >lua
+        vim.lsp.config("ballerina", { ... })
+<
+==============================================================================
+5. Commands                                                  *ballerina-commands*
+
+Buffer-local commands, available in ballerina buffers:
+
+                                                             *:BallerinaFormat*
+:BallerinaFormat        Format the file (or its enclosing package) with
+                        `bal format` now. The buffer must be saved first.
+
+                                                       *:BallerinaFormatToggle*
+:BallerinaFormatToggle  Toggle format-on-save for the current buffer.
+
+                                                                *:BallerinaRun*
+:BallerinaRun           Run `bal run` on the package (or standalone script)
+                        in a terminal split.
+
+                                                               *:BallerinaTest*
+:BallerinaTest          Run `bal test` in a terminal split.
+
+                                                              *:BallerinaBuild*
+:BallerinaBuild         Run `bal build` in a terminal split.
+
+==============================================================================
+6. Format on save                                              *ballerina-format*
+
+`bal format` refuses to format a single file that belongs to a package, so
+saving a file inside a package reformats the whole package. Every loaded,
+unmodified buffer under the package root is then reloaded from disk;
+buffers with unsaved changes are never touched.
+
+To disable format-on-save for a single buffer, use |:BallerinaFormatToggle|
+or: >lua
+    vim.b.ballerina_disable_format = true
+<
+To disable it globally, set |ballerina.nvim-format_on_save| to `false`.
+
+==============================================================================
+7. Health                                                      *ballerina-health*
+
+Run `:checkhealth ballerina` to verify the Neovim version, the resolved
+`bal` binary (and its version), and the LSP client state.
+
+==============================================================================
+8. License                                                    *ballerina-license*
+
+MIT.
+
+ vim:tw=78:ts=8:noet:ft=help:norl:

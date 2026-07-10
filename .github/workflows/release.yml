@@ -1,0 +1,30 @@
+# Publishes the plugin to LuaRocks whenever a semver tag (v1.2.3) is pushed.
+# Requires a LUAROCKS_API_KEY repository secret (luarocks.org -> Settings ->
+# API keys). The rockspec is generated from the repository metadata, so keep
+# the GitHub description, topics, and license accurate.
+name: LuaRocks release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  luarocks-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: LuaRocks upload
+        uses: nvim-neorocks/luarocks-tag-release@v7
+        env:
+          LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
+        with:
+          copy_directories: |
+            doc
+            ftdetect
+            ftplugin
+            lsp
+            syntax
+          detailed_description: |
+            Ballerina support for Neovim: syntax highlighting, native LSP
+            setup, package-aware format-on-save, auto-indent, and
+            run/test/build commands.
