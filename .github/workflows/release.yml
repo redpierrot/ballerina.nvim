@@ -1,14 +1,27 @@
-# Publishes the plugin to LuaRocks whenever a semver tag (v1.2.3) is pushed.
-# Requires a LUAROCKS_API_KEY repository secret (luarocks.org -> Settings ->
-# API keys). The rockspec is generated from the repository metadata, so keep
-# the GitHub description, topics, and license accurate.
-name: LuaRocks release
+# Runs when a semver tag (v1.2.3) is pushed:
+#   1. Creates the GitHub Release with auto-generated notes.
+#   2. Publishes the plugin to LuaRocks. Requires a LUAROCKS_API_KEY
+#      repository secret (luarocks.org -> Settings -> API keys); the
+#      rockspec is generated from repository metadata, so keep the GitHub
+#      description, topics, and license accurate.
+name: Release
 
 on:
   push:
     tags: ["v*"]
 
 jobs:
+  github-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+
   luarocks-upload:
     runs-on: ubuntu-latest
     steps:
@@ -27,5 +40,5 @@ jobs:
             syntax
           detailed_description: |
             Ballerina support for Neovim: syntax highlighting, native LSP
-            setup, package-aware format-on-save, auto-indent, and
-            run/test/build commands.
+            setup, package-aware format-on-save, auto-indent, debugging via
+            nvim-dap, and run/test/build commands with quickfix integration.

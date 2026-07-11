@@ -41,12 +41,14 @@ end
 -- Quickfix resolves relative filenames against Neovim's cwd, but the job
 -- ran in `cwd` (the package root) — rewrite diagnostic paths to absolute.
 local function absolutize(line, cwd)
-  return (line:gsub("^(%u+ %[)(.-)(:%(%d+:%d+)", function(prefix, file, rest)
-    if vim.fn.isabsolutepath(file) == 0 then
-      file = cwd .. "/" .. file
-    end
-    return prefix .. file .. rest
-  end))
+  return (
+    line:gsub("^(%u+ %[)(.-)(:%(%d+:%d+)", function(prefix, file, rest)
+      if vim.fn.isabsolutepath(file) == 0 then
+        file = cwd .. "/" .. file
+      end
+      return prefix .. file .. rest
+    end)
+  )
 end
 
 local function populate_quickfix(lines, cwd, title)
