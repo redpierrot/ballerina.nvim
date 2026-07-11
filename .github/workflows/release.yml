@@ -1,36 +1,94 @@
-# Runs when a semver tag (v1.2.3) is pushed:
-#   1. Creates the GitHub Release with auto-generated notes.
-#   2. Publishes the plugin to LuaRocks. Requires a LUAROCKS_API_KEY
-#      repository secret (luarocks.org -> Settings -> API keys); the
-#      rockspec is generated from repository metadata, so keep the GitHub
-#      description, topics, and license accurate.
+# Manually triggered release (Actions -> Release -> Run workflow):
+#   1. Takes the version from the VERSION file (strips -dev), or an explicit
+#      override input.
+#   2. Commits the release version (VERSION + CHANGELOG heading), tags vX.Y.Z.
+#   3. Creates the GitHub Release with auto-generated notes.
+#   4. Publishes to LuaRocks (requires the LUAROCKS_API_KEY secret).
+#   5. Bumps VERSION to the next -dev version (patch/minor/major input).
+#
+# Everything happens in this one workflow because tags pushed with the
+# default GITHUB_TOKEN never trigger other workflows. Steps 2 and 3 are
+# idempotent, so "Re-run failed jobs" after a fixable failure (e.g. a
+# missing LuaRocks key) picks up where it left off.
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (blank = VERSION file with -dev stripped)"
+        required: false
+        type: string
+      bump:
+        description: "Post-release version bump"
+        required: true
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
 
 jobs:
-  github-release:
+  release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine release version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          else
+            version="$(sed 's/-dev$//' VERSION | tr -d '[:space:]')"
+          fi
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || {
+            echo "::error::'$version' is not a plain semver version (X.Y.Z)"
+            exit 1
+          }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit release version and tag
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          if git rev-parse "v$v" >/dev/null 2>&1; then
+            echo "Tag v$v already exists; skipping (re-run)"
+            exit 0
+          fi
+          echo "$v" > VERSION
+          if grep -q '^## \[Unreleased\]' CHANGELOG.md; then
+            sed -i "s/^## \[Unreleased\]/## [Unreleased]\n\n## [$v] - $(date -u +%F)/" CHANGELOG.md
+          fi
+          git add VERSION CHANGELOG.md
+          git commit -m "chore(release): v$v"
+          git tag -a "v$v" -m "v$v"
+          git push origin HEAD:main "v$v"
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          if gh release view "v$v" >/dev/null 2>&1; then
+            echo "Release v$v already exists; skipping (re-run)"
+          else
+            gh release create "v$v" --title "v$v" --generate-notes --verify-tag
+          fi
 
-  luarocks-upload:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: LuaRocks upload
+      - name: Publish to LuaRocks
         uses: nvim-neorocks/luarocks-tag-release@v7
         env:
           LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
         with:
+          version: ${{ steps.version.outputs.version }}
           copy_directories: |
             compiler
             doc
@@ -42,3 +100,17 @@ jobs:
             Ballerina support for Neovim: syntax highlighting, native LSP
             setup, package-aware format-on-save, auto-indent, debugging via
             nvim-dap, and run/test/build commands with quickfix integration.
+
+      - name: Bump to next development version
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          IFS=. read -r major minor patch <<< "$v"
+          case "${{ inputs.bump }}" in
+            major) next="$((major + 1)).0.0" ;;
+            minor) next="$major.$((minor + 1)).0" ;;
+            *)     next="$major.$minor.$((patch + 1))" ;;
+          esac
+          echo "$next-dev" > VERSION
+          git add VERSION
+          git commit -m "chore: begin v$next development"
+          git push origin HEAD:main
