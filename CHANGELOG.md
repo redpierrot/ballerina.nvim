@@ -22,7 +22,9 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - Buffer-local commands: `:BallerinaFormat`, `:BallerinaFormatToggle`,
   `:BallerinaRun`, `:BallerinaTest`, `:BallerinaBuild` — the last three
   with argument passthrough (`:BallerinaRun -- 8080`,
-  `:BallerinaTest --tests fooTest`).
+  `:BallerinaTest --tests fooTest`), running in a terminal split that
+  starts in terminal-job mode so `<C-c>` reaches the process immediately
+  (e.g. to stop a long-running `bal run` service).
 - Debugging via nvim-dap: the Ballerina debug adapter
   (`bal start-debugger-adapter`) and launch/attach configurations are
   registered automatically when nvim-dap is installed.

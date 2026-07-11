@@ -116,6 +116,11 @@ M.run = function(subcommand, bufnr, fargs)
       populate_quickfix(lines, cwd, table.concat(cmd, " "))
     end,
   })
+  -- Unlike `:terminal`, a buffer put into terminal mode via `jobstart`
+  -- doesn't auto-enter terminal-job mode: without this, keys typed right
+  -- after opening (e.g. <C-c> to stop a long-running `bal run` service)
+  -- land in terminal-normal mode instead of reaching the job.
+  vim.cmd.startinsert()
 end
 
 return M
