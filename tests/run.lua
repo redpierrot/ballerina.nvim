@@ -37,6 +37,7 @@ test("config: defaults", function()
   eq(true, config.options.indent)
   eq(true, config.options.lsp.enabled)
   eq({ "Ballerina.toml" }, config.options.lsp.root_markers)
+  eq(true, config.options.lsp.file_watch)
   eq(nil, config.options.bal_cmd)
 end)
 
@@ -92,6 +93,92 @@ test("util: bal_cmd finds an executable on PATH", function()
   local found = require("ballerina.util").bal_cmd()
   vim.env.PATH = saved_path
   eq(fake, found)
+end)
+
+---------------------------------------------------------------------- lsp --
+
+test("lsp: file_watch on by default enables dynamicRegistration", function()
+  config.setup({})
+  require("ballerina.lsp").setup()
+  eq(
+    true,
+    vim.lsp.config.ballerina.capabilities.workspace.didChangeWatchedFiles.dynamicRegistration
+  )
+end)
+
+test("lsp: file_watch = false disables dynamicRegistration, even after a true run", function()
+  config.setup({ lsp = { file_watch = false } })
+  require("ballerina.lsp").setup()
+  eq(
+    false,
+    vim.lsp.config.ballerina.capabilities.workspace.didChangeWatchedFiles.dynamicRegistration
+  )
+  config.setup({})
+  require("ballerina.lsp").setup()
+end)
+
+------------------------------------------------------------------ lsp_watch --
+
+local lsp_watch = require("ballerina.lsp_watch")
+
+-- The exact registration captured from Ballerina LS 2201.13.4 (Swan Lake
+-- Update 13) — see docs/proposals/scoped-lsp-file-watch.md.
+local captured_watchers = {
+  { globPattern = "/**/*.bal", kind = 7 },
+  { globPattern = "/**/modules/*", kind = 5 },
+  { globPattern = "/**/modules", kind = 4 },
+  { globPattern = "/**/generated", kind = 4 },
+  { globPattern = "/**/Ballerina.toml", kind = 5 },
+  { globPattern = "/**/Cloud.toml", kind = 5 },
+  { globPattern = "/**/Dependencies.toml", kind = 5 },
+}
+
+test("lsp_watch: classifies the captured 7-pattern payload with no unknowns", function()
+  local routed = lsp_watch.classify(captured_watchers)
+  eq({}, routed.unknown, "every captured pattern is recognized")
+
+  eq({
+    { match = "*.bal", kind = 7 },
+    { match = "Ballerina.toml", kind = 5 },
+    { match = "Cloud.toml", kind = 5 },
+    { match = "Dependencies.toml", kind = 5 },
+  }, routed.root_direct)
+
+  eq({
+    { name = "modules", kind = 4 },
+    { name = "generated", kind = 4 },
+  }, routed.root_dir_events)
+
+  eq({
+    { pattern = "**/*.bal", kind = 7 },
+    { pattern = "*", kind = 5 },
+    { pattern = "**/generated", kind = 4 },
+  }, routed.modules)
+
+  eq({
+    { pattern = "**/*.bal", kind = 7 },
+  }, routed.generated)
+end)
+
+test("lsp_watch: unrecognized pattern falls back loudly instead of silently dropping", function()
+  local routed = lsp_watch.classify({
+    { globPattern = "/**/*.bal", kind = 7 },
+    { globPattern = "/**/some-new-pattern", kind = 7 },
+  })
+  eq({ { globPattern = "/**/some-new-pattern", kind = 7 } }, routed.unknown)
+  eq(1, #routed.root_direct, "known patterns are still routed alongside the unknown one")
+end)
+
+test("lsp_watch: a RelativePattern (table globPattern) is treated as unknown", function()
+  local routed = lsp_watch.classify({
+    { globPattern = { baseUri = "file:///tmp", pattern = "**/*.bal" }, kind = 7 },
+  })
+  eq(1, #routed.unknown)
+end)
+
+test("lsp_watch: defaults kind to Create+Change+Delete when the server omits it", function()
+  local routed = lsp_watch.classify({ { globPattern = "/**/*.bal" } })
+  eq(7, routed.root_direct[1].kind)
 end)
 
 ---------------------------------------------------------------------- cli --
