@@ -6,6 +6,24 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `lsp.file_watch` option (`true` by default) to opt out of LSP workspace
+  file watching. Neovim's recursive watcher has been observed to crash
+  outright on macOS when a compiler/Gradle build cache (`target/`,
+  `.gradle/`, ...) contains a pathologically long or invalid path (seen
+  with JaCoCo code-coverage instrumentation in Gradle-wrapped builds); this
+  gives an escape hatch since the client can't exclude subdirectories from
+  the watch. See README Troubleshooting.
+- File watching is now scoped to Ballerina's package structure
+  (`Ballerina.toml`, loose `.bal` files, `modules/`, `generated/`) instead
+  of a single recursive watch over the whole workspace, so a build cache
+  is never watched in the first place — fixing the `ENAMETOOLONG` crash
+  above for `lsp.file_watch = true` (the default) rather than only working
+  around it by turning watching off. `lsp.file_watch = false` remains
+  available as a full opt-out for whatever this scoping doesn't cover. See
+  `docs/proposals/scoped-lsp-file-watch.md`.
+
 ### Fixed
 
 - Run/test/build terminal split now starts in terminal-job mode
