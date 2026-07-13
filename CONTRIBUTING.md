@@ -32,12 +32,12 @@ block.
 
 ## Releasing (maintainers)
 
-Releases are cut from the Actions tab: **Release → Run workflow**. The
-workflow reads the `VERSION` file (e.g. `0.2.0-dev`), releases the stripped
-version (`0.2.0`): it commits, tags `v0.2.0`, creates the GitHub Release
-with generated notes, publishes to LuaRocks, and finally bumps `VERSION`
-to the next `-dev` version (patch by default; minor/major selectable in the
-run form). An explicit version can be supplied to override the file.
+Releases are cut from the Actions tab: **Release → Run workflow**. There's
+no tracked version file — the workflow takes the latest `vX.Y.Z` tag and
+bumps it (patch by default; minor/major selectable in the run form), or
+use an explicit version instead. It updates the CHANGELOG heading if there's
+an `[Unreleased]` section, tags `vX.Y.Z`, creates the GitHub Release with
+generated notes, and publishes to LuaRocks.
 
 Requires the `LUAROCKS_API_KEY` repository secret. The workflow is
 re-run-safe: the tag/release steps skip themselves if they already exist.

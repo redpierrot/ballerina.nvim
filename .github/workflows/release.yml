@@ -1,10 +1,11 @@
 # Manually triggered release (Actions -> Release -> Run workflow):
-#   1. Takes the version from the VERSION file (strips -dev), or an explicit
-#      override input.
-#   2. Commits the release version (VERSION + CHANGELOG heading), tags vX.Y.Z.
+#   1. Determines the release version: an explicit override input, or the
+#      latest vX.Y.Z tag bumped by `bump` (patch/minor/major). Git tags are
+#      the single source of truth — no VERSION file to keep in sync.
+#   2. Commits the CHANGELOG heading update (if there's an [Unreleased]
+#      section to close out), tags vX.Y.Z, and pushes both.
 #   3. Creates the GitHub Release with auto-generated notes.
 #   4. Publishes to LuaRocks (requires the LUAROCKS_API_KEY secret).
-#   5. Bumps VERSION to the next -dev version (patch/minor/major input).
 #
 # Everything happens in this one workflow because tags pushed with the
 # default GITHUB_TOKEN never trigger other workflows. Steps 2 and 3 are
@@ -16,11 +17,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (blank = VERSION file with -dev stripped)"
+        description: "Version to release (blank = bump the latest tag)"
         required: false
         type: string
       bump:
-        description: "Post-release version bump"
+        description: "Version bump (ignored if version is given)"
         required: true
         type: choice
         options: [patch, minor, major]
@@ -43,7 +44,17 @@ jobs:
           if [ -n "${{ inputs.version }}" ]; then
             version="${{ inputs.version }}"
           else
-            version="$(sed 's/-dev$//' VERSION | tr -d '[:space:]')"
+            latest="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1)"
+            if [ -z "$latest" ]; then
+              echo "::error::No existing vX.Y.Z tag found; supply an explicit 'version' input for the first release"
+              exit 1
+            fi
+            IFS=. read -r major minor patch <<< "${latest#v}"
+            case "${{ inputs.bump }}" in
+              major) version="$((major + 1)).0.0" ;;
+              minor) version="$major.$((minor + 1)).0" ;;
+              *)     version="$major.$minor.$((patch + 1))" ;;
+            esac
           fi
           echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || {
             echo "::error::'$version' is not a plain semver version (X.Y.Z)"
@@ -56,19 +67,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Commit release version and tag
+      - name: Commit changelog and tag
         run: |
           v="${{ steps.version.outputs.version }}"
           if git rev-parse "v$v" >/dev/null 2>&1; then
             echo "Tag v$v already exists; skipping (re-run)"
             exit 0
           fi
-          echo "$v" > VERSION
           if grep -q '^## \[Unreleased\]' CHANGELOG.md; then
             sed -i "s/^## \[Unreleased\]/## [Unreleased]\n\n## [$v] - $(date -u +%F)/" CHANGELOG.md
+            git add CHANGELOG.md
+            git commit -m "chore(release): v$v"
           fi
-          git add VERSION CHANGELOG.md
-          git commit -m "chore(release): v$v"
           git tag -a "v$v" -m "v$v"
           git push origin HEAD:main "v$v"
 
@@ -100,17 +110,3 @@ jobs:
             Ballerina support for Neovim: syntax highlighting, native LSP
             setup, package-aware format-on-save, auto-indent, debugging via
             nvim-dap, and run/test/build commands with quickfix integration.
-
-      - name: Bump to next development version
-        run: |
-          v="${{ steps.version.outputs.version }}"
-          IFS=. read -r major minor patch <<< "$v"
-          case "${{ inputs.bump }}" in
-            major) next="$((major + 1)).0.0" ;;
-            minor) next="$major.$((minor + 1)).0" ;;
-            *)     next="$major.$minor.$((patch + 1))" ;;
-          esac
-          echo "$next-dev" > VERSION
-          git add VERSION
-          git commit -m "chore: begin v$next development"
-          git push origin HEAD:main
