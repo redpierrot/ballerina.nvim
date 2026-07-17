@@ -25,6 +25,18 @@ local function reload_from_disk(bufnr, filepath)
       vim.fn.winrestview(view)
     end)
   end
+
+  -- `bal format` rewrote the file on disk, so Neovim's recorded read/write
+  -- timestamp for this buffer is now stale even though the content above
+  -- was just resynced to match. Left alone, the *next* :w on this buffer
+  -- trips Neovim's own stale-timestamp check and throws up "WARNING: The
+  -- file has been changed since reading it!!!" for a change the plugin
+  -- itself made. A forced write is a content no-op here (buffer already
+  -- matches disk) but refreshes that bookkeeping; noautocmd keeps it from
+  -- round-tripping through BufWrite autocmds (e.g. another format-on-save).
+  pcall(vim.api.nvim_buf_call, bufnr, function()
+    vim.cmd("noautocmd write!")
+  end)
 end
 
 -- `bal format` rewrites the whole package, so every other loaded, unmodified
