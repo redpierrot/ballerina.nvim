@@ -6,6 +6,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-07-17
+
 ### Fixed
 
 - Closed a race in the 0.2.1 fix above: `bal format` can take a second or
