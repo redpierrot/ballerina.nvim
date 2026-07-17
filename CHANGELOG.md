@@ -6,6 +6,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Format-on-save no longer leaves Neovim's file-timestamp bookkeeping
+  stale after `bal format` rewrites a buffer's file on disk, which used to
+  make the *next* save falsely warn `WARNING: The file has been changed
+  since reading it!!!` for a change the plugin itself made.
+
 ## [0.2.0] - 2026-07-13
 
 ### Added
