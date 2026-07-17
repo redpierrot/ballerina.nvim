@@ -1,5 +1,9 @@
 local M = {}
 
+-- [bufnr] = true while a `bal format` run this plugin started is still
+-- in flight for that buffer. See M.guard_write below.
+local formatting = {}
+
 local function reload_from_disk(bufnr, filepath)
   local ok, new_lines = pcall(vim.fn.readfile, filepath)
   if not ok then
@@ -102,8 +106,11 @@ M.format = function(bufnr)
   local cwd = root or vim.fs.dirname(filepath)
   local changedtick = vim.api.nvim_buf_get_changedtick(bufnr)
 
+  formatting[bufnr] = true
   local ok, err = pcall(vim.system, cmd, { cwd = cwd, text = true }, function(result)
     vim.schedule(function()
+      formatting[bufnr] = nil
+
       if result.code ~= 0 then
         local msg = result.stderr
         if not msg or msg == "" then
@@ -128,12 +135,38 @@ M.format = function(bufnr)
     end)
   end)
   if not ok then
+    formatting[bufnr] = nil
     vim.notify(
       "bal format could not run: " .. tostring(err),
       vim.log.levels.WARN,
       { title = "Ballerina" }
     )
   end
+end
+
+-- `bal format` (spawned by M.format above) can take a second or more —
+-- Ballerina's CLI has real JVM startup latency — and it rewrites the file
+-- on disk well before its completion callback runs and gets a chance to
+-- refresh Neovim's timestamp bookkeeping (see reload_from_disk). If the
+-- user edits and saves again inside that window, *that* save's own :w
+-- runs Neovim's stale-timestamp check before our callback ever fires,
+-- throwing the same false "file has been changed since reading it"
+-- warning for a change this plugin caused.
+--
+-- Called from a BufWritePre autocmd (see ftplugin/ballerina.lua) for
+-- every save, so it can pre-empt that check: if a format we started is
+-- still in flight for this buffer, force-write the about-to-be-saved
+-- (dirty) content immediately. That refreshes the bookkeeping right
+-- before Neovim's own write runs its check, so it always sees a fresh
+-- timestamp; the buffer content is the user's own newer keystrokes, so
+-- it's correct for it to win over whatever `bal format` wrote.
+M.guard_write = function(bufnr)
+  if not formatting[bufnr] then
+    return
+  end
+  pcall(vim.api.nvim_buf_call, bufnr, function()
+    vim.cmd("noautocmd write!")
+  end)
 end
 
 return M

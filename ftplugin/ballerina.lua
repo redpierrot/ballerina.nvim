@@ -25,6 +25,14 @@ end
 -- `format_on_save` (or setup() running after this buffer opened) takes
 -- effect without reopening the buffer.
 local group = vim.api.nvim_create_augroup("ballerina_ftplugin_" .. bufnr, { clear = true })
+vim.api.nvim_create_autocmd("BufWritePre", {
+  group = group,
+  buffer = bufnr,
+  desc = "Pre-empt a stale-timestamp warning if `bal format` is still running for this buffer",
+  callback = function(args)
+    require("ballerina.format").guard_write(args.buf)
+  end,
+})
 vim.api.nvim_create_autocmd("BufWritePost", {
   group = group,
   buffer = bufnr,

@@ -6,6 +6,17 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Closed a race in the 0.2.1 fix above: `bal format` can take a second or
+  more (JVM startup), and it rewrites the file on disk well before its
+  completion callback runs. Saving again inside that window used to hit
+  Neovim's stale-timestamp check via a plain, unrelated `:w` before the
+  plugin's own callback had a chance to resync — same false "file has been
+  changed since reading it" warning, just from a different code path. A
+  `BufWritePre` guard now pre-empts it whenever a `bal format` this plugin
+  started is still in flight for the buffer being saved.
+
 ## [0.2.1] - 2026-07-17
 
 ### Fixed
