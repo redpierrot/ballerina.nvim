@@ -6,6 +6,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-17
+
 ### Fixed
 
 - Format-on-save no longer leaves Neovim's file-timestamp bookkeeping
