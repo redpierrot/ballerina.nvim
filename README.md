@@ -18,7 +18,7 @@ brace-aware `indentexpr`, `:Ballerina{Run,Test,Build}` with quickfix
 integration, and DAP debugging all ship alongside the LSP config, so
 swapping in `nvim-lspconfig` for the LSP piece alone still leaves those out.
 (If you already use `nvim-lspconfig`, it's not a conflict either way — see
-[Using nvim-lspconfig?](#lsp-capabilities) under Configuration.)
+[LSP capabilities](#lsp-capabilities) under Configuration.)
 
 ## Features
 
@@ -59,6 +59,13 @@ swapping in `nvim-lspconfig` for the LSP piece alone still leaves those out.
   ft = "ballerina",
   opts = {},
 }
+```
+
+Published on [LuaRocks](https://luarocks.org/modules/thisarug/ballerina.nvim)
+— also installable with [rocks.nvim](https://github.com/nvim-neorocks/rocks.nvim):
+
+```vim
+:Rocks install ballerina.nvim
 ```
 
 <details>
