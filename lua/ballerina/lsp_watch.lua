@@ -6,10 +6,21 @@
 -- pathologically long or invalid path, and that crash happens before any
 -- include/exclude glob filtering runs — so the only fix is to never let
 -- such a directory come under a recursive watch in the first place.
+--
+-- Even the root's own *non-recursive* watch (Component A below) isn't
+-- immune: under a heavy write burst inside a build-cache child directory
+-- (e.g. JaCoCo instrumenting hundreds of classes during `bal test
+-- --code-coverage`), a stray event can still surface a deep, pathologically
+-- long path, and core's `vim._watch.watch` crashes on that unconditionally
+-- (`assert(not staterr, staterr)`, before our callback ever runs). Component
+-- A therefore hand-rolls its own fs_event wrapper (`safe_watch_root`)
+-- instead of calling `vim._watch.watch` directly, so that specific assert
+-- can't take Neovim down.
 local bit = require("bit")
 local protocol = require("vim.lsp.protocol")
 local watchfiles = require("vim.lsp._watchfiles")
 local watch = vim._watch
+local uv = vim.uv
 
 local M = {}
 
@@ -176,12 +187,80 @@ local function stop_group(state, name)
   state.group_ids[name] = nil
 end
 
+--- Pure function: classifies a `rename` fs_event given the errname (if any)
+--- from stat'ing its target, same as core's `vim._watch.watch` (an
+--- unstattable target is ENOENT => Deleted, otherwise => Created) except a
+--- stat failure that *isn't* ENOENT — e.g. ENAMETOOLONG from a
+--- pathologically long JaCoCo/coverage path under target/ — classifies as
+--- `nil` (skip) instead of crashing via `assert(not staterr, staterr)`
+--- (`vim._watch.lua:92`). That assert fires unconditionally, before any
+--- include/exclude filtering and before our own callback ever runs, so it
+--- cannot be worked around from the callback side — see the "ENAMETOOLONG"
+--- entry in README Troubleshooting. Skipping (rather than e.g. treating as
+--- Changed) is safe here: Component A's callback only acts on exact
+--- filename/dirname matches, so a mis-classified irrelevant event would
+--- have been a no-op anyway.
+---@param staterrname string|nil
+---@return vim._watch.FileChangeType|nil
+function M.classify_rename(staterrname)
+  if staterrname == "ENOENT" then
+    return watch.FileChangeType.Deleted
+  elseif staterrname then
+    return nil
+  end
+  return watch.FileChangeType.Created
+end
+
+---@param path string
+---@param callback vim._watch.Callback
+---@return fun() cancel
+local function safe_watch_root(path, callback)
+  path = vim.fs.normalize(path)
+  local handle = assert(uv.new_fs_event())
+  local watching_dir = (uv.fs_stat(path) or {}).type == "directory"
+
+  local _, start_err = handle:start(path, {}, function(err, filename, events)
+    if err then
+      return
+    end
+    local fullpath = path
+    if filename and watching_dir then
+      fullpath = vim.fs.normalize(vim.fs.joinpath(fullpath, filename))
+    end
+
+    local change_type
+    if events.rename then
+      local _, _, staterrname = uv.fs_stat(fullpath)
+      change_type = M.classify_rename(staterrname)
+    elseif events.change then
+      change_type = watch.FileChangeType.Changed
+    end
+    if change_type then
+      callback(fullpath, change_type)
+    end
+  end)
+
+  if start_err then
+    handle:close()
+    return function() end
+  end
+
+  return function()
+    if not handle:is_closing() then
+      handle:stop()
+      handle:close()
+    end
+  end
+end
+
 --- Component A. Non-recursive watch of the package root's direct children
---- only (`vim._watch.watch` without `uvflags.recursive`, verified to stay
---- non-recursive on macOS — see the proposal doc's "What we already
---- verified"). Bypasses `_watchfiles.lua` entirely because it hardcodes
---- `recursive = true`, which is exactly what must never happen at the
---- package root (that's where target/, .gradle/, etc. live).
+--- only (`safe_watch_root` above, modelled on `vim._watch.watch` without
+--- `uvflags.recursive` — verified to stay non-recursive on macOS, see the
+--- proposal doc's "What we already verified"). Bypasses both
+--- `_watchfiles.lua` (hardcodes `recursive = true`, which is exactly what
+--- must never happen at the package root, where target/, .gradle/, etc.
+--- live) and `vim._watch.watch` itself (crashes on any non-ENOENT stat
+--- error, see `safe_watch_root`).
 local function root_callback(state)
   return function(fullpath, change_type)
     if fullpath == state.root then
@@ -239,7 +318,7 @@ function M.start(client, routed)
 
   local state = { client = client, root = root, routed = routed, group_ids = {} }
   active[client.id] = state
-  state.root_cancel = watch.watch(root, {}, root_callback(state))
+  state.root_cancel = safe_watch_root(root, root_callback(state))
 
   start_group(state, "modules", vim.fs.joinpath(root, "modules"), routed.modules)
   start_group(state, "generated", vim.fs.joinpath(root, "generated"), routed.generated)

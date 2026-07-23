@@ -8,6 +8,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The scoped LSP file-watching from 0.2.0 could still crash Neovim
+  (`ENAMETOOLONG` from `vim._watch.lua`, requiring you to close the whole
+  terminal to escape the resulting pile-up of error prompts) under a heavy
+  write burst inside a build-cache directory, e.g. JaCoCo instrumenting
+  hundreds of classes during `bal test --code-coverage`: even the package
+  root's non-recursive watch could still surface a stray, pathologically
+  long path from deep inside `target/`, and core's `vim._watch.watch`
+  crashes unconditionally on that rather than skipping it. The root watch
+  now uses its own fs_event wrapper that skips such paths instead of
+  asserting.
 - Closed a race in the 0.2.1 fix above: `bal format` can take a second or
   more (JVM startup), and it rewrites the file on disk well before its
   completion callback runs. Saving again inside that window used to hit
