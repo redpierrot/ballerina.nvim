@@ -1,6 +1,7 @@
 # ballerina.nvim
 
 [![CI](https://github.com/redpierrot/ballerina.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/redpierrot/ballerina.nvim/actions/workflows/ci.yml)
+[![LuaRocks](https://img.shields.io/luarocks/v/thisarug/ballerina.nvim)](https://luarocks.org/modules/thisarug/ballerina.nvim)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Neovim >= 0.11](https://img.shields.io/badge/Neovim-%3E%3D0.11-blueviolet)](#requirements)
 
