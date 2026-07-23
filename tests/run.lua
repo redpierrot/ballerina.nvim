@@ -181,6 +181,24 @@ test("lsp_watch: defaults kind to Create+Change+Delete when the server omits it"
   eq(7, routed.root_direct[1].kind)
 end)
 
+test("lsp_watch: classify_rename treats ENOENT as Deleted", function()
+  eq(vim._watch.FileChangeType.Deleted, lsp_watch.classify_rename("ENOENT"))
+end)
+
+test("lsp_watch: classify_rename treats a successful stat as Created", function()
+  eq(vim._watch.FileChangeType.Created, lsp_watch.classify_rename(nil))
+end)
+
+test(
+  "lsp_watch: classify_rename skips (rather than crashing on) a non-ENOENT stat error",
+  function()
+    -- e.g. ENAMETOOLONG from a pathologically long JaCoCo/coverage path
+    -- under target/ — core's vim._watch.watch asserts and crashes here
+    -- instead; this is the fix for that (see lsp_watch.lua's top comment).
+    eq(nil, lsp_watch.classify_rename("ENAMETOOLONG"))
+  end
+)
+
 ---------------------------------------------------------------------- cli --
 
 local cli = require("ballerina.cli")
