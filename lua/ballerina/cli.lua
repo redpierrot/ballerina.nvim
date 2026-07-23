@@ -40,17 +40,112 @@ end
 
 -- Quickfix resolves relative filenames against Neovim's cwd, but the job
 -- ran in `cwd` (the package root) — rewrite diagnostic paths to absolute.
+local function resolve_path(file, cwd)
+  if vim.fn.isabsolutepath(file) == 1 then
+    return file
+  end
+  return cwd .. "/" .. file
+end
+
 local function absolutize(line, cwd)
   return (
     line:gsub("^(%u+ %[)(.-)(:%(%d+:%d+)", function(prefix, file, rest)
-      if vim.fn.isabsolutepath(file) == 0 then
-        file = cwd .. "/" .. file
-      end
-      return prefix .. file .. rest
+      return prefix .. resolve_path(file, cwd) .. rest
     end)
   )
 end
 
+-- `bal test` assertion failures don't produce a compiler diagnostic (no
+-- `ERROR [file:(l:c,l:c)]` line), so M.errorformat can't see them at all --
+-- they're a separate report shape: a `[fail] <name>:` marker followed by a
+-- Ballerina stack trace with no column info, only `fileName: ... lineNumber:
+-- N` frames, e.g.:
+--
+--   [fail] testAddWrong:
+--       error {ballerina/test:0}TestError ("Assertion Failed! ...")
+--           callableName: createBallerinaError moduleName: ballerina.test.0
+--             fileName: assert.bal lineNumber: 41
+--           callableName: testAddWrong
+--             moduleName: demo.qfcheck$test.0.tests.main_test
+--             fileName: tests/main_test.bal lineNumber: 10
+--           ...
+--
+-- The first frames are always internal `ballerina/test` library plumbing
+-- (assert.bal, serialExecuter.bal, ...) and the trace also includes
+-- compiler-generated test-harness glue (`*-generated*.bal`); neither is
+-- useful as a jump target. We want the first frame that's neither, which is
+-- reliably the user's own test function.
+local function is_internal_frame(frame)
+  return frame.module:match("^ballerina%.") ~= nil
+    or frame.file:match("%-generated") ~= nil
+    or frame.file:match("_generated") ~= nil
+end
+
+local function first_user_frame(frames)
+  for _, frame in ipairs(frames) do
+    if not is_internal_frame(frame) then
+      return frame
+    end
+  end
+  return nil
+end
+
+-- Collapses the free-form error message lines (arbitrary internal
+-- whitespace/newlines from the terminal output) into one line, and strips
+-- the `error {mod:ver}TypeName ("..."）` wrapper Ballerina prints error
+-- values with, e.g. `error {ballerina/test:0}TestError ("Assertion Failed!
+-- ...")` -> `Assertion Failed! ...`. If the message doesn't match that
+-- shape (not every failure is an assertion), it's left as-is.
+local function clean_test_message(raw_lines)
+  local msg = table.concat(raw_lines, " "):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+  msg = msg:gsub('^error%s*%b{}%a*%s*%("', "")
+  msg = msg:gsub('"%)$', "")
+  return msg
+end
+
+---@param lines string[] raw (unmodified) `bal test` output lines
+---@param cwd string package root the job ran in, for resolving relative paths
+---@return table[] quickfix items, one per failure resolvable to a user frame
+M.parse_test_failures = function(lines, cwd)
+  local items = {}
+  local i = 1
+  while i <= #lines do
+    local name = lines[i]:match("^%s*%[fail%]%s+(%S-):%s*$")
+    if not name then
+      i = i + 1
+    else
+      local msg_lines, frames = {}, {}
+      i = i + 1
+      while
+        i <= #lines
+        and not lines[i]:match("^%s*%[%a+%]")
+        and not lines[i]:match("^%s*%d+%s+%a+%s*$")
+      do
+        local module, file, lnum =
+          lines[i]:match("moduleName:%s*(%S+)%s+fileName:%s*(%S+)%s+lineNumber:%s*(%d+)")
+        if module then
+          frames[#frames + 1] = { module = module, file = file, lnum = tonumber(lnum) }
+        elseif #frames == 0 then
+          msg_lines[#msg_lines + 1] = lines[i]
+        end
+        i = i + 1
+      end
+      local frame = first_user_frame(frames)
+      if frame then
+        items[#items + 1] = {
+          filename = resolve_path(frame.file, cwd),
+          lnum = frame.lnum,
+          col = 1,
+          type = "E",
+          text = ("test failed: %s — %s"):format(name, clean_test_message(msg_lines)),
+        }
+      end
+    end
+  end
+  return items
+end
+
+---@return boolean whether any quickfix items were populated
 local function populate_quickfix(lines, cwd, title)
   local rewritten = {}
   for _, line in ipairs(lines) do
@@ -60,6 +155,7 @@ local function populate_quickfix(lines, cwd, title)
   local items = vim.tbl_filter(function(item)
     return item.valid == 1
   end, parsed.items)
+  vim.list_extend(items, M.parse_test_failures(lines, cwd))
 
   vim.fn.setqflist({}, " ", { items = items, title = title })
   if #items > 0 then
@@ -69,6 +165,7 @@ local function populate_quickfix(lines, cwd, title)
       { title = "Ballerina" }
     )
   end
+  return #items > 0
 end
 
 -- Run `bal <subcommand>` for the buffer's enclosing package (or the
@@ -105,6 +202,7 @@ M.run = function(subcommand, bufnr, fargs)
   vim.cmd.split()
   vim.cmd.enew()
   local term_buf = vim.api.nvim_get_current_buf()
+  local term_win = vim.api.nvim_get_current_win()
   vim.fn.jobstart(cmd, {
     cwd = cwd,
     term = true,
@@ -113,7 +211,27 @@ M.run = function(subcommand, bufnr, fargs)
         return
       end
       local lines = vim.api.nvim_buf_get_lines(term_buf, 0, -1, false)
-      populate_quickfix(lines, cwd, table.concat(cmd, " "))
+      local has_items = populate_quickfix(lines, cwd, table.concat(cmd, " "))
+      if not has_items then
+        return
+      end
+      -- Don't pop the quickfix window open over the terminal the user is
+      -- still reading -- wait for them to close it first. If it's already
+      -- closed by the time the job exits (they didn't wait around), open
+      -- immediately instead of waiting for a close event that already happened.
+      if not vim.api.nvim_win_is_valid(term_win) then
+        vim.cmd.copen()
+        return
+      end
+      vim.api.nvim_create_autocmd("WinClosed", {
+        pattern = tostring(term_win),
+        once = true,
+        callback = function()
+          vim.schedule(function()
+            vim.cmd.copen()
+          end)
+        end,
+      })
     end,
   })
   -- Unlike `:terminal`, a buffer put into terminal mode via `jobstart`
