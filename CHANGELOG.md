@@ -6,6 +6,17 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `bal test` assertion failures now land in the quickfix list alongside
+  compiler diagnostics, resolved to the user's own test function (skipping
+  internal `ballerina/test` and compiler-generated frames) — previously only
+  compiler diagnostics were parsed, so a failing test run left the quickfix
+  list empty.
+- The quickfix window now opens automatically once the run/test/build
+  terminal split is closed, instead of immediately on job exit, so it no
+  longer pops up over output you're still reading.
+
 ## [0.2.3] - 2026-07-23
 
 ## [0.2.2] - 2026-07-17

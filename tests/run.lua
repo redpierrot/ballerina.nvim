@@ -226,6 +226,81 @@ test("cli: build_cmd puts `--` program args after the target", function()
   )
 end)
 
+test("cli: parse_test_failures resolves a failure to its own test frame", function()
+  -- Real `bal test` output for an assertEquals failure (captured verbatim,
+  -- tabs and all) -- the stack walks through ballerina/test internals
+  -- (assert.bal), the user's test function, then compiler-generated
+  -- harness glue (test_execute-generated_1.bal) and more internals.
+  local lines = {
+    "\t\tqfcheck",
+    "",
+    "\t\t[pass] testAddOk",
+    "",
+    "\t\t[fail] testAddWrong:",
+    "",
+    '\t\t    error {ballerina/test:0}TestError ("Assertion Failed!',
+    "\t\t\t ",
+    "\t\t\texpected: '999'",
+    "\t\t\tactual\t: '5'\")",
+    "\t\t\t\tcallableName: createBallerinaError moduleName: ballerina.test.0 fileName: assert.bal lineNumber: 41",
+    "\t\t\t\tcallableName: assertEquals moduleName: ballerina.test.0 fileName: assert.bal lineNumber: 109",
+    "\t\t\t\tcallableName: testAddWrong moduleName: demo.qfcheck$test.0.tests.main_test "
+      .. "fileName: tests/main_test.bal lineNumber: 10",
+    "\t\t\t\tcallableName: testAddWrong$lambda1$ "
+      .. "moduleName: demo.qfcheck$test.0.tests.test_execute-generated_1 "
+      .. "fileName: tests/test_execute-generated_1.bal lineNumber: 5",
+    "\t\t\t\tcallableName: call moduleName: ballerina.lang.function.0 fileName: function.bal lineNumber: 37",
+    "",
+    "",
+    "\t\t1 passing",
+    "\t\t1 failing",
+    "\t\t0 skipped",
+  }
+  local items = cli.parse_test_failures(lines, "/pkg")
+  eq(1, #items, "one failure, [pass] produces no item")
+  eq("/pkg/tests/main_test.bal", items[1].filename, "lands on the user's test file, not assert.bal")
+  eq(10, items[1].lnum)
+  eq("E", items[1].type)
+  assert(items[1].text:match("testAddWrong"), "text mentions the test name")
+  assert(items[1].text:match("Assertion Failed"), "text mentions the failure reason")
+end)
+
+test("cli: parse_test_failures ignores passing tests", function()
+  local items = cli.parse_test_failures({ "\t\t[pass] testAddOk", "", "\t\t1 passing" }, "/pkg")
+  eq(0, #items)
+end)
+
+test("cli: parse_test_failures handles multiple failures independently", function()
+  local lines = {
+    "\t\t[fail] testA:",
+    '\t\t    error {ballerina/test:0}TestError ("boom")',
+    "\t\t\t\tcallableName: a moduleName: demo.pkg$test.0.tests.a_test fileName: tests/a_test.bal lineNumber: 3",
+    "",
+    "\t\t[fail] testB:",
+    '\t\t    error {ballerina/test:0}TestError ("bang")',
+    "\t\t\t\tcallableName: b moduleName: demo.pkg$test.0.tests.b_test fileName: tests/b_test.bal lineNumber: 7",
+    "",
+    "\t\t1 passing",
+  }
+  local items = cli.parse_test_failures(lines, "/pkg")
+  eq(2, #items)
+  eq("/pkg/tests/a_test.bal", items[1].filename)
+  eq(3, items[1].lnum)
+  eq("/pkg/tests/b_test.bal", items[2].filename)
+  eq(7, items[2].lnum)
+end)
+
+test("cli: parse_test_failures resolves an already-absolute test path as-is", function()
+  local lines = {
+    "\t\t[fail] testAbs:",
+    '\t\t    error {ballerina/test:0}TestError ("boom")',
+    "\t\t\t\tcallableName: a moduleName: demo.pkg$test.0.tests.a_test fileName: /abs/tests/a_test.bal lineNumber: 3",
+  }
+  local items = cli.parse_test_failures(lines, "/pkg")
+  eq(1, #items)
+  eq("/abs/tests/a_test.bal", items[1].filename)
+end)
+
 test("cli: errorformat parses ERROR and WARNING diagnostics with ranges", function()
   local parsed = vim.fn.getqflist({
     lines = {
