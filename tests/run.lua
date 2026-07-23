@@ -39,6 +39,7 @@ test("config: defaults", function()
   eq({ "Ballerina.toml" }, config.options.lsp.root_markers)
   eq(true, config.options.lsp.file_watch)
   eq(nil, config.options.bal_cmd)
+  eq(nil, config.options.bal_home)
 end)
 
 test("config: user options deep-merge without clobbering siblings", function()
@@ -54,6 +55,8 @@ test("config: rejects wrong option types", function()
   assert(not ok, "expected a validation error for format_on_save = 'yes'")
   ok = pcall(config.setup, { bal_cmd = 42 })
   assert(not ok, "expected a validation error for bal_cmd = 42")
+  ok = pcall(config.setup, { bal_home = 42 })
+  assert(not ok, "expected a validation error for bal_home = 42")
   config.setup({})
 end)
 
@@ -61,6 +64,31 @@ end)
 
 test("util: bal_cmd honors the config override", function()
   config.setup({ bal_cmd = "/opt/custom/bal" })
+  eq("/opt/custom/bal", require("ballerina.util").bal_cmd())
+  config.setup({})
+end)
+
+test("util: bal_cmd resolves bin/bal from the bal_home distribution root", function()
+  package.loaded["ballerina.util"] = nil -- drop the module-level cache
+  local home = vim.fn.tempname()
+  vim.fn.mkdir(home .. "/bin", "p")
+  local fake = home .. "/bin/bal"
+  vim.fn.writefile({ "#!/bin/sh", "exit 0" }, fake)
+  vim.uv.fs_chmod(fake, 493) -- 0755
+  config.setup({ bal_home = home })
+  eq(fake, require("ballerina.util").bal_cmd())
+  config.setup({})
+end)
+
+test("util: bal_cmd is nil when bal_home has no runnable bin/bal", function()
+  package.loaded["ballerina.util"] = nil
+  config.setup({ bal_home = vim.fn.tempname() }) -- nonexistent dir
+  eq(nil, require("ballerina.util").bal_cmd())
+  config.setup({})
+end)
+
+test("util: bal_cmd prefers bal_cmd over bal_home", function()
+  config.setup({ bal_cmd = "/opt/custom/bal", bal_home = "/opt/dist" })
   eq("/opt/custom/bal", require("ballerina.util").bal_cmd())
   config.setup({})
 end)

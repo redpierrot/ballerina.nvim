@@ -45,8 +45,8 @@ swapping in `nvim-lspconfig` for the LSP piece alone still leaves those out.
   Developed against Swan Lake 2201.13.x.
 - `bal` on your `PATH`. If it isn't (common when GUI Neovim is launched
   outside a login shell), the plugin also checks `$BALLERINA_HOME` and the
-  official installer locations, or set `bal_cmd` explicitly (see
-  [Configuration](#configuration)).
+  official installer locations — see
+  [Setting the Ballerina distribution](#setting-the-ballerina-distribution).
 
 ## Installation
 
@@ -129,7 +129,8 @@ Defaults:
 
 ```lua
 require("ballerina").setup({
-  bal_cmd = nil,  -- path to the `bal` binary; nil = auto-detect
+  bal_cmd = nil,   -- path to the `bal` binary; nil = auto-detect
+  bal_home = nil,  -- path to a distribution root; nil = auto-detect
   format_on_save = true,
   indent = true,
   lsp = {
@@ -143,6 +144,38 @@ require("ballerina").setup({
   },
 })
 ```
+
+### Setting the Ballerina distribution
+
+By default the plugin resolves `bal` from your `PATH`, then
+`$BALLERINA_HOME/bin/bal`, then the official installer locations.
+`:checkhealth ballerina` always shows which one it picked.
+
+Override it with either:
+
+- **`bal_home`** — a distribution root (the `$BALLERINA_HOME` layout, with
+  `bin/bal` inside). Handy for pointing at a locally built distribution.
+- **`bal_cmd`** — an exact binary path. Wins over `bal_home` if both are set.
+
+**Globally**, in every project:
+
+```lua
+require("ballerina").setup({
+  bal_home = "~/ballerina-lang/distribution/zip/jballerina-tools/build/"
+    .. "extracted-distributions/jballerina-tools-<version>",
+})
+```
+
+**Per-project** — e.g. trying a local `ballerina-lang` build against one
+repo without touching your global config — pick one:
+
+- A project-local `.nvim.lua` (Neovim's `exrc`, see `:h exrc`) that calls
+  `setup()` with a different `bal_home`. Requires `vim.o.exrc = true` and
+  trusting the file once (`:h :trust`).
+- `$BALLERINA_HOME` set per-directory, e.g. via
+  [direnv](https://direnv.net/) — already in the auto-detect chain, so it
+  works automatically *as long as `bal_home`/`bal_cmd` aren't also set
+  globally* (explicit config always wins over the env var).
 
 ### LSP capabilities
 
@@ -202,8 +235,8 @@ the adapter and the debuggee are JVM processes.
 - Run `:checkhealth ballerina` first — it verifies the Neovim version,
   locates `bal` (and prints which one), and reports the LSP client state.
 - Language server not attaching? Almost always `bal` missing from the
-  environment Neovim was launched in — set `bal_cmd` to an absolute path if
-  auto-detection fails (see [Configuration](#configuration)).
+  environment Neovim was launched in — see
+  [Setting the Ballerina distribution](#setting-the-ballerina-distribution).
 - `:checkhealth vim.lsp` shows the client log if the server starts and then
   crashes.
 

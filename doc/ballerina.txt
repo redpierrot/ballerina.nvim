@@ -47,6 +47,7 @@ options.
 Defaults: >lua
     require("ballerina").setup({
       bal_cmd = nil,
+      bal_home = nil,
       format_on_save = true,
       indent = true,
       lsp = {
@@ -66,6 +67,25 @@ bal_cmd ~
     then `$BALLERINA_HOME/bin/bal` (the installers export $BALLERINA_HOME),
     then the install locations used by the official Linux/macOS/Windows
     distributions.
+
+                                                        *ballerina.nvim-bal_home*
+bal_home ~
+    Path to a Ballerina distribution root — the `$BALLERINA_HOME` layout, with
+    `bin/bal` (or `bin\bal.bat` on Windows) inside. The `bal` launcher is
+    resolved from it, so every command (LSP, run/test/build, format, debug)
+    uses that distribution. Handy for Ballerina language developers pointing
+    the plugin at a locally built distribution, e.g. >lua
+        require("ballerina").setup({
+          bal_home = vim.fn.expand(
+            "~/ballerina-lang/distribution/zip/jballerina-tools/build/"
+              .. "extracted-distributions/jballerina-tools-<version>"
+          ),
+        })
+<
+    Ignored when |ballerina.nvim-bal_cmd| is set (that's the more specific of
+    the two). When set but no runnable `bin/bal` is found under it, resolution
+    fails rather than falling back to a system install — the point is to pin a
+    specific build; see |:checkhealth| ballerina.
 
                                                   *ballerina.nvim-format_on_save*
 format_on_save ~
@@ -203,9 +223,9 @@ integration.
 Run `:checkhealth ballerina` first: it verifies the Neovim version, locates
 `bal` (and reports which one), and shows the LSP client state. If the
 language server never attaches, this is almost always `bal` missing from
-the environment Neovim was launched in; see |ballerina.nvim-bal_cmd|.
-`:checkhealth vim.lsp` shows the client log if the server starts and then
-crashes.
+the environment Neovim was launched in; see |ballerina.nvim-bal_cmd| and
+|ballerina.nvim-bal_home|. `:checkhealth vim.lsp` shows the client log if
+the server starts and then crashes.
 
                                                    *ballerina-enametoolong*
 Neovim can crash with `ENAMETOOLONG` from `vim._watch`, mentioning a path
