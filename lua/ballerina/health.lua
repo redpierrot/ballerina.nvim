@@ -14,9 +14,14 @@ M.check = function()
   local config = require("ballerina.config").options
   local bal = require("ballerina.util").bal_cmd()
   if not bal then
+    local hint = config.bal_home
+        and ("`bal_home` is set to %q, but no runnable bin/bal was found under it"):format(
+          config.bal_home
+        )
+      or "Or set `bal_cmd` (binary) or `bal_home` (distribution root) in require('ballerina').setup()"
     health.error("`bal` executable not found", {
       "Install Ballerina: https://ballerina.io/downloads/",
-      "Or set `bal_cmd` in require('ballerina').setup()",
+      hint,
     })
   else
     local ok, result = pcall(function()

@@ -22,7 +22,12 @@
 
 ---@class ballerina.Config
 ---@field bal_cmd string? Path to the `bal` binary. nil = auto-detect (PATH,
----then the known install locations of the official distributions).
+---then $BALLERINA_HOME, then the known install locations of the official
+---distributions).
+---@field bal_home string? Path to a Ballerina distribution root (the
+---BALLERINA_HOME layout, with bin/bal inside); the `bal` launcher is resolved
+---from it. Useful for language developers pointing the plugin at a locally
+---built distribution. Ignored when bal_cmd is set. nil = auto-detect.
 ---@field format_on_save boolean Run `bal format` after saving a .bal file.
 ---@field indent boolean Use the bundled brace/paren-aware indentexpr.
 ---@field lsp ballerina.LspConfig
@@ -33,6 +38,7 @@ local M = {}
 ---@type ballerina.Config
 M.defaults = {
   bal_cmd = nil,
+  bal_home = nil,
   format_on_save = true,
   indent = true,
   lsp = {
@@ -52,6 +58,7 @@ M.options = vim.deepcopy(M.defaults)
 M.setup = function(opts)
   opts = opts or {}
   vim.validate("bal_cmd", opts.bal_cmd, "string", true)
+  vim.validate("bal_home", opts.bal_home, "string", true)
   vim.validate("format_on_save", opts.format_on_save, "boolean", true)
   vim.validate("indent", opts.indent, "boolean", true)
   vim.validate("lsp", opts.lsp, "table", true)

@@ -6,6 +6,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `bal_home` option: point the plugin at a Ballerina distribution root (the
+  `$BALLERINA_HOME` layout) instead of an exact `bal_cmd` binary path — handy
+  for Ballerina language developers pinning a locally built distribution,
+  globally or per-project via a project-local `.nvim.lua`.
+
 ### Fixed
 
 - `bal test` assertion failures now land in the quickfix list alongside
