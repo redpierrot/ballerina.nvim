@@ -6,6 +6,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-07-23
+
 ### Added
 
 - `bal_home` option: point the plugin at a Ballerina distribution root (the
