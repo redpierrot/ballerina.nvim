@@ -465,6 +465,188 @@ for _, case in ipairs(indent_cases) do
   end)
 end
 
+------------------------------------------------------------- textobjects --
+
+local textobjects = require("ballerina.textobjects")
+
+-- Outer (`a`) and inner (`i`) text of every object of `kind` found in `src`.
+local function objects(src, kind)
+  local outer, inner = {}, {}
+  for _, e in ipairs(textobjects.scan(src)[kind]) do
+    outer[#outer + 1] = src:sub(e.start, e.stop)
+    for _, b in ipairs(e.bodies) do
+      inner[#inner + 1] = vim.trim(src:sub(b[1] + 1, b[2] - 1))
+    end
+  end
+  return outer, inner
+end
+
+test("textobjects: function with qualifiers, string and comment braces", function()
+  local src = table.concat({
+    "public isolated function greet(string name) returns string {",
+    "    // a } in a comment",
+    '    string s = "}{ not a brace";',
+    "    return `hi ${name} }`;",
+    "}",
+  }, "\n")
+  local outer, inner = objects(src, "func")
+  eq({ src }, outer)
+  eq({ vim.trim(src:match("{(.*)}$")) }, inner)
+end)
+
+test("textobjects: resource, remote and anonymous functions", function()
+  local src = table.concat({
+    "service /api on l {",
+    "    resource function get hello() returns string {",
+    '        return "x";',
+    "    }",
+    "    remote function onMsg(string m) { }",
+    "}",
+    "var f = function (int x) returns int { return x; };",
+  }, "\n")
+  local outer = objects(src, "func")
+  eq({
+    'resource function get hello() returns string {\n        return "x";\n    }',
+    "remote function onMsg(string m) { }",
+    "function (int x) returns int { return x; }",
+  }, outer)
+end)
+
+test("textobjects: functions without a body are skipped", function()
+  local src = table.concat({
+    "type Cb function (int a) returns int;",
+    "function ext() returns error? = external;",
+    "function take(function (int) returns int cb) { }",
+    "type Obj object { function m(); };",
+  }, "\n")
+  eq({ "function take(function (int) returns int cb) { }" }, (objects(src, "func")))
+end)
+
+test("textobjects: record return type is not the function body", function()
+  local src = "function f() returns record {| int a; |} { return {a: 1}; }"
+  local outer, inner = objects(src, "func")
+  eq({ src }, outer)
+  eq({ "return {a: 1};" }, inner)
+end)
+
+test("textobjects: if / else if / else is one block with a body per branch", function()
+  local src = table.concat({
+    "function f(int x) {",
+    "    if x == {}.length() {",
+    "        a();",
+    "    } else if x > 1 {",
+    "        b();",
+    "    } else {",
+    "        c();",
+    "    }",
+    "}",
+  }, "\n")
+  local outer, inner = objects(src, "block")
+  eq(1, #outer)
+  assert(outer[1]:find("^if x") and outer[1]:find("c%(%);\n    }$"), outer[1])
+  eq({ "a();", "b();", "c();" }, inner)
+end)
+
+test("textobjects: loops, match, do/on fail, retry transaction", function()
+  local src = table.concat({
+    "function f() {",
+    "    foreach var i in [{a: 1}] { g(i); }",
+    "    while i < 3 { i += 1; }",
+    "    match x {",
+    "        1 => { h(); }",
+    "    }",
+    "    do { risky(); } on fail error e { log(e); }",
+    "    retry transaction { commit(); }",
+    "}",
+  }, "\n")
+  local outer = objects(src, "block")
+  eq({
+    "foreach var i in [{a: 1}] { g(i); }",
+    "while i < 3 { i += 1; }",
+    "match x {\n        1 => { h(); }\n    }",
+    "{ h(); }",
+    "do { risky(); } on fail error e { log(e); }",
+    "retry transaction { commit(); }",
+  }, outer)
+  local _, inner = objects(src, "block")
+  assert(vim.tbl_contains(inner, "log(e);"), "on fail body is its own inner region")
+end)
+
+test("textobjects: class-like declarations", function()
+  local src = table.concat({
+    "public type Person record {|",
+    "    string name;",
+    "|};",
+    "public isolated class Foo {",
+    "    int x = 0;",
+    "}",
+    "enum Color { RED, GREEN }",
+    "service /s on l { }",
+  }, "\n")
+  local outer = objects(src, "class")
+  eq({
+    "public type Person record {|\n    string name;\n|};",
+    "public isolated class Foo {\n    int x = 0;\n}",
+    "enum Color { RED, GREEN }",
+    "service /s on l { }",
+  }, outer)
+end)
+
+test("textobjects: identifiers and members that merely look like keywords", function()
+  local src = table.concat({
+    "function f() {",
+    "    int functional = 1;",
+    "    x.lock = 2;",
+    "    transaction:Info i = transaction:info();",
+    '    string \'function = "if (x) {";',
+    "}",
+  }, "\n")
+  eq(0, #textobjects.scan(src).block)
+  eq(1, #textobjects.scan(src).func)
+end)
+
+test("textobjects: mini.ai specs return line/col regions and skip empty bodies", function()
+  vim.cmd("enew!")
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "function a() {",
+    "    int x = 1;",
+    "}",
+    "function b() {}",
+  })
+  eq({
+    { from = { line = 1, col = 1 }, to = { line = 3, col = 1 } },
+    { from = { line = 4, col = 1 }, to = { line = 4, col = 15 } },
+  }, textobjects.func("a"))
+  eq({ { from = { line = 2, col = 5 }, to = { line = 2, col = 14 } } }, textobjects.func("i"))
+  vim.cmd("bwipeout!")
+end)
+
+test("textobjects: attach registers configured keys and respects user specs", function()
+  vim.cmd("enew!")
+  local mine = function() end
+  vim.b.miniai_config = { custom_textobjects = { o = mine } }
+  config.setup({ textobjects = { keys = { block = "o", class = false } } })
+  textobjects.attach(vim.api.nvim_get_current_buf())
+  local custom = vim.b.miniai_config.custom_textobjects
+  eq(textobjects.func, custom.f)
+  eq(mine, custom.o, "a buffer-local spec the user set is kept")
+  eq(nil, custom.c, "a key set to false is not registered")
+  textobjects.detach(vim.api.nvim_get_current_buf())
+  eq(nil, vim.b.miniai_config.custom_textobjects.f)
+  eq(mine, vim.b.miniai_config.custom_textobjects.o)
+  config.setup({})
+  vim.cmd("bwipeout!")
+end)
+
+test("textobjects: enabled = false registers nothing", function()
+  vim.cmd("enew!")
+  config.setup({ textobjects = { enabled = false } })
+  textobjects.attach(vim.api.nvim_get_current_buf())
+  eq(nil, vim.b.miniai_config)
+  config.setup({})
+  vim.cmd("bwipeout!")
+end)
+
 ---------------------------------------------------------------------------
 
 if failed > 0 then

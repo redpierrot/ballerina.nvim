@@ -31,6 +31,10 @@ swapping in `nvim-lspconfig` for the LSP piece alone still leaves those out.
   and reloads affected buffers)
 - **Auto-indent** — a brace/paren-aware `indentexpr` (`cindent` misreads
   `io:println(...)` as a C jump label)
+- **Text objects** for [mini.ai](https://github.com/echasnovski/mini.ai) —
+  `af`/`if` (function), `ao`/`io` (if/else, loops, match, ...), `ac`/`ic`
+  (class, service, record, ...), with no tree-sitter grammar needed
+  ([details](#text-objects))
 - **`:Ballerina{Run,Test,Build,Format}`** commands, with compiler
   diagnostics landing in the quickfix list
 - **Debugging** via [nvim-dap](https://github.com/mfussenegger/nvim-dap),
@@ -149,6 +153,42 @@ require("ballerina").setup({
   },
   dap = {
     enabled = true,
+  },
+  textobjects = {
+    enabled = true,  -- mini.ai text objects, see Text objects
+    keys = { func = "f", block = "o", class = "c" },  -- false disables one
+  },
+})
+```
+
+### Text objects
+
+Ballerina has no tree-sitter grammar, so the tree-sitter-backed mini.ai
+objects (`ai.gen_spec.treesitter({ a = "@function.outer", ... })`) fail in
+`.bal` buffers. This plugin registers grammar-free replacements on the
+buffer-local `vim.b.miniai_config`; nothing else is touched, and without
+mini.ai it does nothing.
+
+| Keys    | Selects                                                                            |
+| ------- | ---------------------------------------------------------------------------------- |
+| `af/if` | a function (with `public`/`isolated`/`resource`/... qualifiers) / its body         |
+| `ao/io` | an `if`/`else if`/`else` chain, `while`, `foreach`, `match`, `do`/`on fail`, `lock`, `transaction`, `retry`, `fork`, `worker` / the body under the cursor |
+| `ac/ic` | a `class`, `service`, `enum`, or `record`/`object` type / its body                 |
+
+Comments, strings and templates are ignored, so a `}` inside them can't
+confuse it. It is a scanner, not a parser: a few exotic constructs may be
+missed (see [`docs/proposals/textobjects.md`](docs/proposals/textobjects.md)).
+
+Note that mini.ai's *default* `f` is "function call"; if you rely on that in
+Ballerina buffers, remap it with `textobjects.keys.func = "F"` (or any key,
+or `false` to leave it alone). To use the specs under your own keys instead:
+
+```lua
+require("mini.ai").setup({
+  custom_textobjects = {
+    F = require("ballerina.textobjects").func,
+    B = require("ballerina.textobjects").block,
+    C = require("ballerina.textobjects").class,
   },
 })
 ```
@@ -313,7 +353,8 @@ same level of coverage most language syntax files have.
 
 - [neotest](https://github.com/nvim-neotest/neotest) adapter for `bal test`
 - Snippets
-- Treesitter support, if/when a Ballerina grammar appears
+- Treesitter support, if/when a Ballerina grammar appears (the text objects
+  would then be replaced by queries)
 
 ## Related
 

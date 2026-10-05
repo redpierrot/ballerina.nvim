@@ -10,10 +10,11 @@ CONTENTS                                                    *ballerina-contents*
     5. Commands .............................. |ballerina-commands|
     6. Format on save ........................ |ballerina-format|
     7. Quickfix .............................. |ballerina-quickfix|
-    8. Debugging ............................. |ballerina-dap|
-    9. Health ................................ |ballerina-health|
-    10. Troubleshooting ....................... |ballerina-troubleshooting|
-    11. License .............................. |ballerina-license|
+    8. Text objects .......................... |ballerina-textobjects|
+    9. Debugging ............................. |ballerina-dap|
+    10. Health ................................ |ballerina-health|
+    11. Troubleshooting ....................... |ballerina-troubleshooting|
+    12. License .............................. |ballerina-license|
 
 ==============================================================================
 1. Introduction                                         *ballerina-introduction*
@@ -58,6 +59,10 @@ Defaults: >lua
       },
       dap = {
         enabled = true,
+      },
+      textobjects = {
+        enabled = true,
+        keys = { func = "f", block = "o", class = "c" },
       },
     })
 <
@@ -194,7 +199,43 @@ A compiler definition is also included for the classic workflow: >vim
     :make
 <
 ==============================================================================
-8. Debugging                                                      *ballerina-dap*
+8. Text objects                                            *ballerina-textobjects*
+
+Ballerina has no tree-sitter grammar, so the tree-sitter-backed mini.ai
+objects do not work in `.bal` buffers. When |ballerina.nvim-textobjects|
+is enabled, grammar-free replacements are registered on the buffer-local
+`b:miniai_config` (a spec you set buffer-locally yourself is kept). Without
+mini.ai nothing happens.
+
+    `af` `if`   function (with qualifiers) / its body
+    `ao` `io`   if/else chain, while, foreach, match, do/on fail, lock,
+                transaction, retry, fork, worker / the body under the cursor
+    `ac` `ic`   class, service, enum, record/object type / its body
+
+Comments, strings and templates are ignored. This is a scanner, not a
+parser: a few exotic constructs may be missed.
+
+                                                    *ballerina.nvim-textobjects*
+textobjects.enabled ~
+    Register the text objects. Default `true`.
+
+                                               *ballerina.nvim-textobjects-keys*
+textobjects.keys ~
+    mini.ai keys: `{ func = "f", block = "o", class = "c" }`. Set one to
+    `false` to leave it unregistered (mini.ai's own `f` is "function call").
+
+To bind them yourself: >lua
+    require("mini.ai").setup({
+      custom_textobjects = {
+        F = require("ballerina.textobjects").func,
+        B = require("ballerina.textobjects").block,
+        C = require("ballerina.textobjects").class,
+      },
+    })
+<
+
+==============================================================================
+9. Debugging                                                      *ballerina-dap*
 
 When https://github.com/mfussenegger/nvim-dap is installed (and
 |ballerina.nvim-dap-enabled| is not disabled), opening a ballerina buffer
@@ -211,14 +252,14 @@ needed. The first launch takes several seconds, as both the adapter and the
 debuggee are JVM processes.
 
 ==============================================================================
-9. Health                                                      *ballerina-health*
+10. Health                                                      *ballerina-health*
 
 Run `:checkhealth ballerina` to verify the Neovim version, the resolved
 `bal` binary (and its version), the LSP client state, and the nvim-dap
 integration.
 
 ==============================================================================
-10. Troubleshooting                                   *ballerina-troubleshooting*
+11. Troubleshooting                                   *ballerina-troubleshooting*
 
 Run `:checkhealth ballerina` first: it verifies the Neovim version, locates
 `bal` (and reports which one), and shows the LSP client state. If the
@@ -251,7 +292,7 @@ it didn't get through Neovim — open or re-save the generated file, or
 `:LspRestart`, to pick those up.
 
 ==============================================================================
-11. License                                                   *ballerina-license*
+12. License                                                   *ballerina-license*
 
 MIT.
 
