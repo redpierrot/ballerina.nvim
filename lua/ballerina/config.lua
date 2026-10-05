@@ -20,6 +20,19 @@
 ---@field enabled boolean Register the nvim-dap adapter/configurations when
 ---nvim-dap is installed.
 
+---@class ballerina.TextobjectKeys
+---@field func string|false mini.ai key for functions (`af`/`if`).
+---@field block string|false mini.ai key for block statements: if/else,
+---loops, match, do, lock, transaction, ... (`ao`/`io`).
+---@field class string|false mini.ai key for class/service/record/object/enum
+---declarations (`ac`/`ic`).
+
+---@class ballerina.TextobjectsConfig
+---@field enabled boolean Register grammar-free mini.ai text objects in
+---Ballerina buffers (there is no tree-sitter grammar for the tree-sitter-backed
+---ones to use). Has no effect without mini.ai.
+---@field keys ballerina.TextobjectKeys A key set to `false` is not registered.
+
 ---@class ballerina.Config
 ---@field bal_cmd string? Path to the `bal` binary. nil = auto-detect (PATH,
 ---then $BALLERINA_HOME, then the known install locations of the official
@@ -32,6 +45,7 @@
 ---@field indent boolean Use the bundled brace/paren-aware indentexpr.
 ---@field lsp ballerina.LspConfig
 ---@field dap ballerina.DapConfig
+---@field textobjects ballerina.TextobjectsConfig
 
 local M = {}
 
@@ -50,6 +64,10 @@ M.defaults = {
   dap = {
     enabled = true,
   },
+  textobjects = {
+    enabled = true,
+    keys = { func = "f", block = "o", class = "c" },
+  },
 }
 
 M.options = vim.deepcopy(M.defaults)
@@ -63,6 +81,7 @@ M.setup = function(opts)
   vim.validate("indent", opts.indent, "boolean", true)
   vim.validate("lsp", opts.lsp, "table", true)
   vim.validate("dap", opts.dap, "table", true)
+  vim.validate("textobjects", opts.textobjects, "table", true)
 
   M.options = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts)
 end

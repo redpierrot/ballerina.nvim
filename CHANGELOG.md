@@ -10,6 +10,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- mini.ai text objects for Ballerina, with no tree-sitter grammar needed
+  (there isn't one, so the tree-sitter-backed `f`/`c`/`o` errored in `.bal`
+  buffers): `af`/`if` (function), `ao`/`io` (`if`/`else` chains, loops,
+  `match`, `do`/`on fail`, `lock`, `transaction`, ...) and `ac`/`ic`
+  (`class`, `service`, `enum`, `record`/`object` types). Comments, strings
+  and templates are masked out first, so braces inside them don't confuse
+  the matching. Registered buffer-locally via `b:miniai_config`; configure or
+  disable with the new `textobjects` option (`textobjects.keys.func = false`
+  keeps mini.ai's own `f`, "function call"). See the README's Text objects
+  section.
 - `bal_home` option: point the plugin at a Ballerina distribution root (the
   `$BALLERINA_HOME` layout) instead of an exact `bal_cmd` binary path — handy
   for Ballerina language developers pinning a locally built distribution,

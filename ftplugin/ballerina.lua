@@ -74,6 +74,8 @@ for command, subcommand in pairs({
   })
 end
 
+require("ballerina.textobjects").attach(bufnr)
+
 if config.dap.enabled then
   require("ballerina.dap").setup()
 end
@@ -87,5 +89,6 @@ vim.b.undo_ftplugin = table.concat({
   "silent! delcommand -buffer BallerinaRun",
   "silent! delcommand -buffer BallerinaTest",
   "silent! delcommand -buffer BallerinaBuild",
+  ("silent! lua require('ballerina.textobjects').detach(%d)"):format(bufnr),
   "unlet! b:did_ballerina_ftplugin",
 }, " | ")
