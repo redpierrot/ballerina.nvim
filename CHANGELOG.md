@@ -6,8 +6,6 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.2.4] - 2026-07-23
-
 ### Added
 
 - mini.ai text objects for Ballerina, with no tree-sitter grammar needed
@@ -20,6 +18,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   disable with the new `textobjects` option (`textobjects.keys.func = false`
   keeps mini.ai's own `f`, "function call"). See the README's Text objects
   section.
+
+## [0.2.4] - 2026-07-23
+
+### Added
+
 - `bal_home` option: point the plugin at a Ballerina distribution root (the
   `$BALLERINA_HOME` layout) instead of an exact `bal_cmd` binary path — handy
   for Ballerina language developers pinning a locally built distribution,
